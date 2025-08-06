@@ -1,0 +1,61 @@
+#!/bin/bash
+
+#run the in main folder: ../folderwherecrestwasexecuted
+# run either as:  crest_9_G16Extractenergy all    to go through all the folders and find the energies from GAUSSIAN OUTPUT FILES
+#or run as: crest_9_G16Extractenergy FOLDERNAME to go through all the folders that contain "FOLDERNAME" in their name
+
+
+main=$(echo `pwd`)
+report=$(echo "${main}/energyreport.txt")
+#echo "Structure  opt_energy  gibbs_corr solvation_kcal  SP_energy" > $report
+echo "Structure  opt_energy  gibbs_corr  SP_energy" > $report
+for folder in ls -d */
+do
+  cd $folder
+  if test -f *Opt_*.log
+  then
+    lastoptenergy=$(grep "SCF Done:" *Opt_*.log | tail -1 | awk '{split($0,a," "); print a[5]}')
+    gibbsenergy=$(grep "Thermal correction to Gibbs Free Energy" *Opt_*.log |tail -1 | awk '{split($0,a," "); print a[7]}')
+    solvationkcal=$(grep "SMD-CDS (non-electrostatic) energy" *Opt_*.log | tail -1 | awk '{split($0,a," "); print a[6]}')
+  fi
+  if test -f *FINAL_*.log
+  then
+    finalenergy=$(grep "SCF Done:" *FINAL_*.log | tail -1 | awk '{split($0,a," "); print a[5]}')
+  fi
+
+  if [[ -z $lastoptenergy ]]
+  then
+    lastoptenergy="fail"
+  fi
+  if [[ -z $gibbsenergy ]]
+  then
+    gibbsenergy="fail"
+  fi
+  if [[ -z $solvationkcal ]]
+  then
+    solvationkcal="fail"
+  fi
+  if [[ -z $finalenergy ]]
+  then
+    finalenergy="fail"
+  fi
+
+#  echo "${folder}  ${lastoptenergy}  ${gibbsenergy}  ${solvationkcal}  ${finalenergy}" >> $report
+echo "${folder}  ${lastoptenergy}  ${gibbsenergy}  ${finalenergy}" >> $report
+
+  lastoptenergy="fail"
+  gibbsenergy="fail"
+  solvationkcal="fail"
+  finalenergy="fail"
+
+
+
+  cd $main
+done
+
+cp $report compressed_energyreport.txt
+gawk -i inplace '!/fail/' compressed_energyreport.txt
+
+
+
+#-------------------------------------------------#

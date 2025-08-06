@@ -1,0 +1,130 @@
+#!/bin/bash
+
+#run inside separated_configurations folder
+#if any of the folders does not have a SP energy, missingSP.txt will list the missing folders
+#then run crest_4_SPrestart complete the series of calculations
+
+
+if [[ -z $1 ]]
+then
+  ener_gap=15
+  #energy gap is 15 kcal/mol unl unless stated otherwise
+else
+  ener_gap=$1
+fi
+
+if test -f missingSP.txt
+then
+  rm missingSP.txt
+fi
+
+######  get all the energies #####
+total=$(ls -l | grep "^d" | wc -l)
+counter=1
+touch energylist.txt
+while [ $counter -le $total ]
+do
+  number=$(printf "%03d" ${counter}; echo)
+  SPoutputname=$(echo "SP_${number}.log")
+  if test -f ${number}/${SPoutputname}
+  then
+    checkgrep=$(grep "SCF Done:" ${number}/$SPoutputname)
+    if [[ ! -z $checkgrep ]]
+    then
+      echo $number >> energylist.txt
+      grep "SCF Done:" ${number}/$SPoutputname | awk '{split($0,a," "); print a[5]}' >> energylist.txt
+    else
+      echo "$number" >> missingSP.txt
+    fi
+  else
+    echo "$number" >> missingSP.txt
+  fi
+  counter=$((counter+1))
+done
+#################################
+
+
+###### order energies ###########
+
+
+
+nlines=$(wc -l < energylist.txt)
+nstructures=$((nlines/2))
+cp energylist.txt oldenergylist.txt
+counter=1
+while [ $counter -le $nstructures ]
+do
+  bestenerline=2
+  nextenerline=$((bestenerline+2))
+  linesleft=$(wc -l < energylist.txt)
+  strucleft=$((linesleft/2))
+  counterleft=1
+  while [ $counterleft -le $strucleft ]
+  do
+    bestener=$(sed "${bestenerline}q;d" energylist.txt)
+    nextener=$(sed "${nextenerline}q;d" energylist.txt)
+    if [[ ! -z $nextener ]]
+    then
+      if (( $(echo "$bestener > $nextener" | bc -l) ))
+      then
+        bestenerline=$((nextenerline))
+        nextenerline=$((nextenerline+2))
+      else
+        nextenerline=$((nextenerline+2))
+      fi
+    fi
+    counterleft=$((counterleft+1))
+  done
+  beststructureline=$((bestenerline-1))
+  if [ $beststructureline == "1" ]
+  then
+    sed -n '1,2p' energylist.txt >> sorted_SP.txt
+    sed '1,2d' energylist.txt > tmp.txt
+    mv tmp.txt energylist.txt
+  elif [ $bestenerline == $linesleft ]
+  then
+    sed -n "${beststructureline},${bestenerline}p" energylist.txt >> sorted_SP.txt
+    prevline=$((beststructureline-1))
+    sed -n "1,${prevline}p" energylist.txt > tmp.txt
+    mv tmp.txt energylist.txt
+  else
+    prevline=$((beststructureline-1))
+    sed -n "${beststructureline},${bestenerline}p" energylist.txt >> sorted_SP.txt
+    sed -n "1,${prevline}p" energylist.txt > tmp.txt
+    nxtline=$((bestenerline+1))
+    sed -n "${nxtline},${linesleft}p" energylist.txt >> tmp.txt
+    mv tmp.txt energylist.txt
+  fi
+  counter=$((counter+1))
+done
+rm energylist.txt
+##########
+
+######## new file with list of structures within 15kcal/mol ####
+#variables to keep: nlines; nstructures
+
+if test -f list4OPT.txt
+then
+  rm list4OPT.txt
+fi
+
+refener=$(sed -n "2p" sorted_SP.txt)
+nextenerline=0
+counter=1
+touch list4OPT.txt
+while [ $counter -le $nstructures ]
+do
+  nextenerline=$((nextenerline+2))
+  nextener=$(sed "${nextenerline}q;d" sorted_SP.txt)
+  enerdiff=$(echo "(${nextener}-(${refener}))*627" | bc)
+  nextstructureline=$((nextenerline-1))
+  if (( $(echo "$enerdiff < $ener_gap" | bc -l) ))
+  then
+    sed -n "${nextstructureline}p" sorted_SP.txt >> list4OPT.txt
+    echo "${enerdiff}" >> SPenergygap.txt
+  else
+    break
+  fi
+  counter=$((counter+1))
+done
+#rm oldenergylist.txt sorted_SP.txt

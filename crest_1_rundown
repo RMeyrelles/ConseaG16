@@ -1,0 +1,167 @@
+#!/bin/bash
+
+#If constrains are required, prepare a file named "constrains_XYZNAME.txt",
+#in which XYZNME is the same from XYZNANE.xyz that will be converted into ".constrains"
+#example: struc1.xyz and constrains_struc1.txt will be used together for the crest run
+
+
+#edit here the number of cores (for VSC or local)
+numbercores=4
+
+echo "name of xyz file"
+read fl
+if [[ $fl == *".xyz" ]]
+then
+  x=${fl%.xyz}
+else
+  x=$fl
+fi
+
+echo "charge of system (number)"
+read crg
+
+if [[ $crg != '0' ]]
+then
+  charge=$(echo "-chrg ${crg} ")
+fi
+
+
+x2=$(echo "crest_${1}")
+
+mkdir crest_${x}
+cd crest_${x}
+mv ../${x}.xyz .
+
+x2t ${x}.xyz > coord.ref
+
+echo "#!/bin/bash" >> submit_crest
+echo "#SBATCH -p compute" >> submit_crest
+echo '#SBATCH -N 1' >> submit_crest
+echo "#SBATCH --ntasks-per-node=${numbercores}" >> submit_crest
+echo '#SBATCH --mem=112640' >> submit_crest
+
+echo 'export TMPDIR=/public/`hostname -s`/scratch/tmp/$LOGNAME.$$' >> submit_crest
+echo 'mkdir $TMPDIR' >> submit_crest
+
+echo 'export OMP_STACKSIZE=10G' >> submit_crest
+echo "export OMP_NUM_THREADS=${numbercores},1" >> submit_crest
+echo 'export OMP_MAX_ACTIVE_LEVELS=1' >> submit_crest
+echo "export MKL_NUM_THREADS=${numbercores}" >> submit_crest
+
+echo '' >> submit_crest
+
+echo "crest ${x}.xyz -ewin 7 ${charge}-T ${numbercores} > output" >> submit_crest
+
+
+echo '' >> submit_crest
+
+echo 'rm -rf $TMPDIR' >> submit_crest
+
+echo '' >> submit_crest
+
+
+mv submit_crest $x2
+
+if find ../ -name "constrains_${x}.txt"
+then
+  mv ../constrains_${x}.txt .constrains
+fi
+
+
+sbatch -x silicon[1-25],thulium $x2
+
+
+rm -f submit_crest
+rm -f submit_crest_tmp*
+cd ..
+
+
+############################## Constrains creation ################################
+
+#echo '--constrain 5,21,31' >> freeze
+
+
+#echo 'atoms: 5,21,31' >> .constrains
+#echo '$metadyn' >> .constrains
+#echo 'atoms: 1-4,6-20,22-30,32-192' >> .constrains
+#echo '$end' >> .constrains
+
+
+
+##standard
+#echo 'atoms 7,3' >> .constrains
+#echo 'distance: 7, 3, auto' >> .constrains
+#echo 'distance: 34, 3, auto' >> .constrains
+#echo 'distance: 39, 18, auto' >> .constrains
+#echo 'distance: 39, 38, auto' >> .constrains
+#echo 'distance: 38, 18, auto' >> .constrains
+#echo 'force constant=1.0' >> .constrains
+#echo 'reference=coord.ref' >> .constrains
+#
+#echo '$metadyn' >> .constrains
+#echo 'atoms: 1-2,4-6,8-39' >> .constrains
+##standard
+
+#echo 'distance: 10, 24, auto' >> .constrains
+#echo 'distance: 16, 21, auto' >> .constrains
+
+
+
+
+##transmetallation R
+#echo 'atoms 1,5,20,30,33,34,35,41' >> .constrains
+#echo 'distance: 34, 35, auto' >> .constrains
+#echo 'distance: 34, 41, auto' >> .constrains
+#echo 'distance: 34, 5, auto' >> .constrains
+#echo 'distance: 34, 30, auto' >> .constrains
+#echo 'distance: 30, 5, auto' >> .constrains
+#echo 'distance: 5, 33, auto' >> .constrains
+#echo 'distance: 34, 33, auto' >> .constrains
+#echo 'distance: 34, 20, auto' >> .constrains
+#echo 'distance: 20, 5, auto' >> .constrains
+#echo 'distance: 34, 33, auto' >> .constrains
+#echo 'distance: 5, 1, auto' >> .constrains
+#echo 'force constant=1.0' >> .constrains
+#echo 'reference=coord.ref' >> .constrains
+#
+#echo '$metadyn' >> .constrains
+#echo 'atoms: 2-4,6-19,21-29,31,32,36-40,42-229' >> .constrains
+
+#transmetallation S
+#echo 'distance: 37, 30, auto' >> .constrains
+#echo 'distance: 30, 5, auto' >> .constrains
+#echo 'distance: 37, 5, auto' >> .constrains
+#echo 'distance: 5, 36, auto' >> .constrains
+#echo 'distance: 37, 38, auto' >> .constrains
+#echo 'distance: 37, 41, auto' >> .constrains
+#echo 'distance: 5, 39, auto' >> .constrains
+#echo 'distance: 37, 36, auto' >> .constrains
+#echo 'distance: 5, 1, auto' >> .constrains
+#echo 'force constant=10' >> .constrains
+
+#complex after TM
+#echo 'distance: 5, 31, auto' >> .constrains
+#echo 'distance: 5, 21, auto' >> .constrains
+#echo 'force constant=10' >> .constrains
+
+#reductive elimination
+#echo 'atoms 5,21,31' >> .constrains
+#echo 'distance: 21, 31, auto' >> .constrains
+#echo 'distance: 21, 5, auto' >> .constrains
+#echo 'distance: 5, 31, auto' >> .constrains
+#echo 'force constant=1.0' >> .constrains
+#echo 'reference=coord.ref' >> .constrains
+#echo '$metadyn' >> .constrains
+#echo 'atoms: 1-4,6-20,22-30,32-208' >> .constrains
+
+
+
+#oxidative addition
+#echo 'distance: 5, 31, auto' >> .constrains
+#echo 'distance: 5, 21, auto' >> .constrains
+#echo 'distance: 31, 21, auto' >> .constrains
+#echo 'force constant=10' >> .constrains
+
+#echo 'angle: 5, 7, 8, auto' >> .constrains
+#echo 'dihedral: 3, 4, 1, 7, 180' >> .constrains
+#echo '$end' >> .constrains

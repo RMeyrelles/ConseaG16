@@ -1,0 +1,101 @@
+#!/bin/bash
+
+
+
+######  get all the energies #####
+#total=$(ls -l | grep "^d" | wc -l)
+total=$(wc -l < list4OPT.txt)
+
+counter=1
+touch OPT_energylist.txt
+while [ $counter -le $total ]
+do
+#  number=$(printf "%03d" ${counter}; echo)
+  number=$(sed "${counter}q;d" list4OPT.txt)
+
+  OPToutputname=$(echo "Opt_${number}.log")
+  if test -f ${number}/${OPToutputname} #####
+  then
+    checkgrep=$(grep "Thermal correction to Gibbs Free Energy" ${number}/$OPToutputname)
+    if [[ ! -z $checkgrep ]]
+    then
+      echo $number >> OPT_energylist.txt
+#      grep "SCF Done:" ${number}/$OPToutputname | tail -1 | awk '{split($0,a," "); print a[5]}' >> OPT_energylist.txt
+#      grep "Thermal correction to Gibbs Free Energy" ${number}/$OPToutputname | awk '{split($0,a," "); print a[7]}' >> OPT_energylist.txt
+      grep "Sum of electronic and thermal Free Energies=" ${number}/$OPToutputname | awk '{split($0,a," "); print a[8]}' >> OPT_energylist.txt
+    else
+      echo "$number" >> missingOPT.txt
+    fi
+  else
+    grepmissing=$(grep ${number} list4OPT.txt)
+    if [[ ! -z $grepmissing ]]
+    then
+      echo "$number" >> missingOPT.txt
+    fi
+  fi
+  counter=$((counter+1))
+done
+#################################
+
+nlines=$(wc -l < OPT_energylist.txt)
+nlines=$((nlines/2))
+if [[ -z $1 ]]
+then
+  numbest=1
+  #energy gap is 15 kcal/mol unl unless stated otherwise
+elif [ $nlines -le $1 ]
+then
+  numbest=$nlines
+else
+  numbest=$1
+fi
+
+###### get best energy then print to comand line ###########
+
+
+cp OPT_energylist.txt old_OPT_energylist.txt
+counter1=1
+while [ $counter1 -le $numbest ]
+do
+  counter=1
+  nlines=$(wc -l < OPT_energylist.txt)
+  nstructures=$((nlines/2))
+  bestenerline=2
+  nextenerline=$((bestenerline+2))
+  while [ $counter -le $nstructures ]
+  do
+    bestener=$(sed "${bestenerline}q;d" OPT_energylist.txt)
+    nextener=$(sed "${nextenerline}q;d" OPT_energylist.txt)
+    if [[ ! -z $nextener ]]
+    then
+      bestfree=$(echo "$bestener" | bc -l)
+      nextfree=$(echo "$nextener" | bc -l)
+      if (( $(echo "$bestfree > $nextfree" | bc -l) ))
+      then
+        bestenerline=$((nextenerline))
+        nextenerline=$((nextenerline+2))
+      else
+        nextenerline=$((nextenerline+2))
+      fi
+    fi
+    counter=$((counter+1))
+  done
+  beststructureline=$((bestenerline-1))
+  
+    sed -n "${beststructureline},${bestenerline}p" OPT_energylist.txt >> bestlist.txt
+    sed "${beststructureline},${bestenerline}d" OPT_energylist.txt > tmp.txt
+    mv tmp.txt OPT_energylist.txt
+    counter1=$((counter1+1))
+done
+
+counter=1
+strucline=1
+while [ $counter -le $numbest ]
+do
+  echo "best structure #${counter} is  $(sed -n "${strucline}p" bestlist.txt)"
+  echo "$(sed -n "${strucline}p" bestlist.txt)" >> OPT_best.txt
+  strucline=$((strucline+2))
+  counter=$((counter+1))
+done
+
+rm OPT_energylist.txt old_OPT_energylist.txt bestlist.txt

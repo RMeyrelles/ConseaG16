@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# run this script inside "separated_configurations" folder
+#cleans undisired structures
+
+if [[ ! -z $1 ]]
+then
+  limit=$1
+else
+  echo "how many structures?"
+  read limit
+fi
+
+
+tag=$(pwd | perl -F/ -wane 'print $F[-2]'; echo)
+
+geoms=$(ls geo* | wc -l)
+counter=1
+while [ $counter -le 999 ]
+do
+  if [[ $counter -gt $limit ]]
+  then 
+    number=$(printf "%03d" ${counter}; echo)
+    filename=$(echo "geo_"${number}".xyz")
+    if test -f $filename
+    then
+    	rm $filename
+    fi
+  fi
+  counter=$((counter+1))
+done

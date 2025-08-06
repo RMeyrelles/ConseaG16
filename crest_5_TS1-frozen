@@ -1,0 +1,159 @@
+#!/bin/bash
+
+# run this script inside "separated_configurations" folder
+# from the structures mentioned in the file "list4OPT.txt"
+
+#maximum number of structures to be optimized can be provided when running the input
+maxoptstruc=$1
+
+echo "How many restraints? (max 3)"
+read restn
+
+if [[ $restn -eq 1 ]]
+then
+  echo "restraint 1"
+  read rest1
+  rest2=$(echo "")
+  rest3=$(echo "")
+elif [[ $restn -eq 2 ]]
+then
+  echo "restraint 1"
+  read rest1
+  echo "restraint 2"
+  read rest2
+  rest3=$(echo "")
+else
+  echo "restraint 1"
+  read rest1
+  echo "restraint 2"
+  read rest2
+  echo "restraint 3"
+  read rest3
+fi
+
+memory=16
+cores=8
+
+###define here the solvent###
+#echo "what is the solvent?"
+#read solvent
+solvent=$(echo "tetrahydrofuran")
+
+
+inputtsline=$(echo "# B3LYP/def2svp opt=(modredundant,maxcycle=250) freq=NoRaman nosymm EmpiricalDispersion=GD3BJ scf=(maxcycle=250) SCRF=(PCM,SMD,Solvent=${solvent}) geom=checkpoint")
+
+
+#echo "charge?"
+#read charge
+#echo "multiplicity?"
+#read multiplicity
+####charge and multiplicity is read from the SPfile.com###
+
+tag=$(pwd | perl -F/ -wane 'print $F[-2]'; echo)
+
+
+geoms=$(wc -l < list4OPT.txt)
+
+if [[ ! -z $maxoptstruc ]]
+then
+  if [[ $maxoptstruc -lt geoms ]]
+  then
+    sed "$maxoptstruc,p" list4OPT.txt > tempfile.txt
+    mv tempfile list4OPT.txt
+    geoms=$(wc -l < list4OPT.txt)
+  fi
+fi
+
+
+counter=1
+while [ $counter -le $geoms ]
+do
+  number=$(sed -n "${counter}p" list4OPT.txt)
+  cd $number
+
+  submit=$(echo "opt_${tag}_${number}")
+ # rm -f $submit
+  finalname=$(echo "Frz_${number}.com")
+
+  echo '#!/bin/bash' > $submit
+  echo '#SBATCH -p compute' >> $submit
+  echo '#SBATCH -N 1' >> $submit
+  echo "#SBATCH --ntasks-per-node=$cores" >> $submit
+  echo '#SBATCH --mem=9000' >> $submit
+  echo 'export TMPDIR=/public/`hostname -s`/scratch/tmp/$LOGNAME.$$' >> $submit
+  echo 'mkdir $TMPDIR' >> $submit
+  echo 'module use /usr/license/modulefiles' >> $submit
+  echo 'module load gaussian/16.c03' >> $submit
+  echo "g16 < Frz_${number}.com > Frz_${number}.log" >> $submit
+  echo 'rm -rf $TMPDIR' >> $submit
+
+  touch $finalname
+  echo "%oldchk="`pwd`"/${number}.chk" > $finalname
+  echo "%chk="`pwd`"/${number}_FRZ.chk" >> $finalname
+  echo "%mem=${memory}GB" >> $finalname
+  echo "%nprocshared=$cores" >> $finalname
+
+  echo ${inputtsline} >> $finalname
+
+  echo '' >> $finalname
+  echo "${number} frozen opt" >> $finalname
+  echo '' >> $finalname
+  checkgrep=$(grep "%oldchk=" SP_${number}.com)
+  if [[ ! -z $checkgrep ]]
+  then
+    sed -n "9p" SP_${number}.com >> $finalname
+  else
+    sed -n "8p" SP_${number}.com >> $finalname
+  fi
+  echo '' >> $finalname
+echo "$rest1" >> $finalname
+echo "$rest2" >> $finalname
+echo "$rest3" >> $finalname
+echo '' >> $finalname
+echo '' >> $finalname
+
+
+
+  sbatch -x lead[1-8],aurora,silicon[1-25],tellurium[1-8],thulium,europium $submit
+
+  cd ..
+  counter=$((counter+1))
+done
+
+#rm -f $submit
+
+
+#echo '# opt freq b3lyp/6-31g(d) scrf=(CPCM,solvent=dichloromethane) empiricaldispersion=gd3 gfinput gfoldprint gfprint pop=(reg,NBO)' >> title
+#echo '#p opt(gdiis,maxcycle=1000) freq b3lyp/6-31+g(d,p) scrf=(SMD,solvent=dichloromethane) empiricaldispersion=gd3 gfinput gfoldprint gfprint pop=(reg,NBO)' >> title
+
+#echo '#p opt freq b3lyp/6-31+g(d,p) scrf=(SMD,solvent=dichloromethane) empiricaldispersion=gd3 gfinput gfoldprint gfprint pop=(reg,NBO)' >> title
+
+#echo '#p opt=(TS,noeigentest,calcfc,gdiis) freq b3lyp/6-31+g(d,p) scrf=(SMD,solvent=dichloromethane) empiricaldispersion=gd3 gfinput gfoldprint gfprint pop=(reg,NBO)' >> title
+#echo '# opt freq b3lyp/6-31+g(d,p) empiricaldispersion=gd3 gfinput gfoldprint gfprint pop=(reg,NBO)' >> title
+#echo '# opt freq b3lyp/def2svp scrf=(CPCM,solvent=dichloromethane) empiricaldispersion=gd3 gfinput gfoldprint gfprint pop=(reg,NBO)' >> title
+#echo '# opt freq b3lyp/def2tzvp scrf=(CPCM,solvent=dichloromethane) empiricaldispersion=gd3 gfinput gfoldprint gfprint pop=(reg,NBO)' >> title
+
+#echo '# opt freq b3lyp/6-31+g(d,p) scrf=(SMD,solvent=acetonitrile) empiricaldispersion=gd3 gfinput gfoldprint gfprint pop=(reg,NBO)' >> title
+
+#echo '#P upbe1pbe/def2svp scrf=(cpcm,solvent=water) empiricaldispersion=gd3bj gfinput gfprint scf=(maxcycle=1200,yqc)' >> title
+
+#echo '# opt freq b3lyp/6-31g(d) scrf=(dipole,solvent=dichloromethane) empiricaldispersion=gd3 gfinput gfoldprint gfprint pop=(reg,NBO)' >> title
+
+#echo '# opt=modred freq b3lyp/6-31+g(d,p) scrf=(SMD,solvent=dichloromethane) empiricaldispersion=gd3 gfinput gfoldprint gfprint pop=(reg,NBO)' >> title
+
+#DALIA
+#echo '# opt freq ub3lyp/6-31G(d) gfinput gfoldprint gfprint pop=(reg,NBO) iop(6/7=3)' >> title
+
+
+#echo '# opt=(TS,noeigentest,calcfc) freq b3lyp/6-31+g(d,p) scrf=(SMD,solvent=dichloromethane) empiricaldispersion=gd3 gfinput gfoldprint gfprint pop=(reg,NBO)' >> title
+#echo '# opt=(TS,noeigentest,calcfc) freq b3lyp/6-31+g(d,p) empiricaldispersion=gd3 gfinput gfoldprint gfprint pop=(reg,NBO)' >> title
+
+
+
+###### solvent list: ####
+#  Water	Acetonitrile	Methanol	Ethanol	IsoQuinoline	Quinoline	Chloroform	DiethylEther	Dichloromethane	DiChloroEthane	CarbonTetraChloride	Benzene	Toluene	ChloroBenzene	NitroMethane	Heptane	CycloHexane	Aniline	Acetone	TetraHydroFuran	DiMethylSulfoxide	Argon	Krypton	Xenon	n-Octanol	1,1,1-TriChloroEthane	1,1,2-TriChloroEthane	1,2,4-TriMethylBenzene	1,2-DiBromoEthane	1,2-EthaneDiol	1,4-Dioxane
+#  1-Bromo-2-MethylPropane	1-BromoOctane	1-BromoPentane	1-BromoPropane	1-Butanol	1-ChloroHexane	1-ChloroPentane	1-ChloroPropane	1-Decanol	1-FluoroOctane	1-Heptanol	1-Hexanol	1-Hexene	1-Hexyne	1-IodoButane	1-IodoHexaDecane	1-IodoPentane	1-IodoPropane	1-NitroPropane	1-Nonanol	1-Pentanol	1-Pentene	1-Propanol	2,2,2-TriFluoroEthanol	2,2,4-TriMethylPentane	2,4-DiMethylPentane	2,4-DiMethylPyridine	2,6-DiMethylPyridine	2-BromoPropane	2-Butanol	2-ChloroButane
+#  2-Heptanone	2-Hexanone	2-MethoxyEthanol	2-Methyl-1-Propanol	2-Methyl-2-Propanol	2-MethylPentane	2-MethylPyridine	2-NitroPropane	2-Octanone	2-Pentanone	2-Propanol	2-Propen-1-ol	3-MethylPyridine	3-Pentanone	4-Heptanone	4-Methyl-2-Pentanone	4-MethylPyridine	5-Nonanone	AceticAcid	AcetoPhenone	a-ChloroToluene	Anisole	Benzaldehyde	BenzoNitrile	BenzylAlcohol	BromoBenzene	BromoEthane	Bromoform	Butanal	ButanoicAcid	Butanone
+#  ButanoNitrile	ButylAmine	ButylEthanoate	CarbonDiSulfide	Cis-1,2-DiMethylCycloHexane	Cis-Decalin	CycloHexanone	CycloPentane	CycloPentanol	CycloPentanone	Decalin-mixture	DiBromomEthane	DiButylEther	DiEthylAmine	DiEthylSulfide	DiIodoMethane	DiIsoPropylEther	DiMethylDiSulfide	DiPhenylEther	DiPropylAmine	e-1,2-DiChloroEthene	e-2-Pentene	EthaneThiol	EthylBenzene	EthylEthanoate	EthylMethanoate	EthylPhenylEther	FluoroBenzene	Formamide	FormicAcid	HexanoicAcid
+#  IodoBenzene	IodoEthane	IodoMethane	IsoPropylBenzene	m-Cresol	Mesitylene	MethylBenzoate	MethylButanoate	MethylCycloHexane	MethylEthanoate	MethylMethanoate	MethylPropanoate	m-Xylene	n-ButylBenzene	n-Decane	n-Dodecane	n-Hexadecane	n-Hexane	NitroBenzene	NitroEthane	n-MethylAniline	n-MethylFormamide-mixture	n,n-DiMethylAcetamide	n,n-DiMethylFormamide	n-Nonane	n-Octane	n-Pentadecane	n-Pentane	n-Undecane	o-ChloroToluene	o-Cresol
+#  o-DiChloroBenzene	o-NitroToluene	o-Xylene	Pentanal	PentanoicAcid	PentylAmine	PentylEthanoate	PerFluoroBenzene	p-IsoPropylToluene	Propanal	PropanoicAcid	PropanoNitrile	PropylAmine	PropylEthanoate	p-Xylene	Pyridine	sec-ButylBenzene	tert-ButylBenzene	TetraChloroEthene	TetraHydroThiophene-s,s-dioxide	Tetralin	Thiophene	Thiophenol	trans-Decalin	TriButylPhosphate	TriChloroEthene	TriEthylAmine	Xylene-mixture	z-1,2-DiChloroEthene

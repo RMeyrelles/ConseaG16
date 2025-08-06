@@ -1,0 +1,116 @@
+#!/bin/bash
+
+# run this script inside "separated_configurations" folder
+
+#define here the number of cores
+cores=16
+memory=32
+#define here the opt job description
+finalSPline=$(echo "# B3LYP/def2tzvp empiricaldispersion=gd3bj SCRF=(PCM,SMD,solvent=dichloromethane) nosymm geom=checkpoint scf=(maxcycle=250)")
+#finalSPline=$(echo "# B3LYP/def2tzvp empiricaldispersion=gd3bj SCRF=(PCM,SMD,solvent=generic,read) nosymm geom=checkpoint scf=(maxcycle=250)")
+hfip=0
+
+#echo "charge?"
+#read charge
+#echo "multiplicity?"
+#read multiplicity
+
+
+tag=$(pwd | perl -F/ -wane 'print $F[-2]'; echo)
+
+if [[ -z $1 ]]
+then
+  geoms=1
+  #energy gap is 15 kcal/mol unl unless stated otherwise
+else
+  geoms=$1
+fi
+
+counter=1
+while [ $counter -le $geoms ]
+do
+  number=$(sed -n "${counter}p" OPT_best.txt)
+  cd $number
+  submit=$(echo "FINAL_${tag}_${number}")
+  finalname=$(echo "FINAL_${number}.com")
+  echo '#!/bin/bash' > $submit
+  echo '#SBATCH -p compute' >> $submit
+  echo '#SBATCH -N 1' >> $submit
+  echo "#SBATCH --ntasks-per-node=$cores" >> $submit
+  echo '#SBATCH --mem=9000' >> $submit
+  echo 'export TMPDIR=/public/`hostname -s`/scratch/tmp/$LOGNAME.$$' >> $submit
+  echo 'mkdir $TMPDIR' >> $submit
+
+  echo 'export g16root=/usr/license/gaussian16_new/rev_c01/avx2/' >> $submit
+  echo 'export GAUSS_EXEDIR=$g16root/g16/bsd:$g16root/g16' >> $submit
+  echo 'export GAUSS_BSDDIR=$g16root/g16/bsd' >> $submit
+  echo 'export GAUSS_SCRDIR=$TMPDIR' >> $submit
+  echo 'export PATH=${GAUSS_EXEDIR}:${PATH}' >> $submit
+
+
+  echo "g16 < $finalname > FINAL_${number}.log" >> $submit
+  echo 'rm -rf $TMPDIR' >> $submit
+
+  touch $finalname
+  echo "%oldchk="`pwd`"/${number}_OPT.chk" > $finalname
+  echo "%mem=${memory}GB" >> $finalname
+  echo "%nprocshared=$cores" >> $finalname
+  echo "${finalSPline}" >> $finalname
+  echo '' >> $finalname
+  echo "final SP energy calculation for $number" >> $finalname
+  echo '' >> $finalname
+  checkgrep=$(grep "%oldchk=" SP_${number}.com)
+  if [[ ! -z $checkgrep ]]
+  then
+    sed -n "9p" SP_${number}.com >> $finalname
+  else
+    sed -n "8p" SP_${number}.com >> $finalname
+  fi
+  echo '' >> $finalname
+  if [[ hfip -eq 1 ]]
+  then
+    echo "Eps=16.7" >> $finalname
+    echo "EpsInf=1.625625" >> $finalname
+    echo "HbondAcidity=0.57" >> $finalname
+    echo "HbondBasicity=0.25" >> $finalname
+    echo "SurfaceTensionAtInterface=30.13" >> $finalname
+    echo "CarbonAromaticity=0.000" >> $finalname
+    echo "ElectronegativeHalogenicity=0.6" >> $finalname
+    echo '' >> $finalname
+  fi
+  echo '' >> $finalname
+
+
+#echo '# opt freq b3lyp/6-31g(d) scrf=(CPCM,solvent=dichloromethane) empiricaldispersion=gd3 gfinput gfoldprint gfprint pop=(reg,NBO)' >> title
+#echo '#p opt(gdiis,maxcycle=1000) freq b3lyp/6-31+g(d,p) scrf=(SMD,solvent=dichloromethane) empiricaldispersion=gd3 gfinput gfoldprint gfprint pop=(reg,NBO)' >> title
+
+#echo '#p opt freq b3lyp/6-31+g(d,p) scrf=(SMD,solvent=dichloromethane) empiricaldispersion=gd3 gfinput gfoldprint gfprint pop=(reg,NBO)' >> title
+
+#echo '#p opt=(TS,noeigentest,calcfc,gdiis) freq b3lyp/6-31+g(d,p) scrf=(SMD,solvent=dichloromethane) empiricaldispersion=gd3 gfinput gfoldprint gfprint pop=(reg,NBO)' >> title
+#echo '# opt freq b3lyp/6-31+g(d,p) empiricaldispersion=gd3 gfinput gfoldprint gfprint pop=(reg,NBO)' >> title
+#echo '# opt freq b3lyp/def2svp scrf=(CPCM,solvent=dichloromethane) empiricaldispersion=gd3 gfinput gfoldprint gfprint pop=(reg,NBO)' >> title
+#echo '# opt freq b3lyp/def2tzvp scrf=(CPCM,solvent=dichloromethane) empiricaldispersion=gd3 gfinput gfoldprint gfprint pop=(reg,NBO)' >> title
+
+#echo '# opt freq b3lyp/6-31+g(d,p) scrf=(SMD,solvent=acetonitrile) empiricaldispersion=gd3 gfinput gfoldprint gfprint pop=(reg,NBO)' >> title
+
+#echo '#P upbe1pbe/def2svp scrf=(cpcm,solvent=water) empiricaldispersion=gd3bj gfinput gfprint scf=(maxcycle=1200,yqc)' >> title
+
+#echo '# opt freq b3lyp/6-31g(d) scrf=(dipole,solvent=dichloromethane) empiricaldispersion=gd3 gfinput gfoldprint gfprint pop=(reg,NBO)' >> title
+
+#echo '# opt=modred freq b3lyp/6-31+g(d,p) scrf=(SMD,solvent=dichloromethane) empiricaldispersion=gd3 gfinput gfoldprint gfprint pop=(reg,NBO)' >> title
+
+#DALIA
+#echo '# opt freq ub3lyp/6-31G(d) gfinput gfoldprint gfprint pop=(reg,NBO) iop(6/7=3)' >> title
+
+
+#echo '# opt=(TS,noeigentest,calcfc) freq b3lyp/6-31+g(d,p) scrf=(SMD,solvent=dichloromethane) empiricaldispersion=gd3 gfinput gfoldprint gfprint pop=(reg,NBO)' >> title
+#echo '# opt=(TS,noeigentest,calcfc) freq b3lyp/6-31+g(d,p) empiricaldispersion=gd3 gfinput gfoldprint gfprint pop=(reg,NBO)' >> title
+
+
+  #rm -f $submit
+
+  sbatch -w polonium[1-20],tellurium[1-12] $submit
+
+  cd ..
+  counter=$((counter+1))
+done

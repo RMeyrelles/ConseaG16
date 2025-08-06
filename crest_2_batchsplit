@@ -1,0 +1,32 @@
+#!/bin/bash
+
+home=$(pwd)
+
+for folder in ls -d */
+do
+  cd $folder
+  if test -d separated_conformations/
+  then
+    echo "${folder} already split"
+  else
+    mkdir separated_conformations
+    cd separated_conformations
+    cp ../crest_conformers.xyz .
+
+    ATOM=$(head -1 crest_conformers.xyz)
+    z=$(echo "$ATOM+2" | bc)
+
+    split_NEW --additional-suffix=".xyz" --suffix-length=3 --numeric-suffix=1 -l $z crest_conformers.xyz geo_
+
+    if [[ ! -z $1 ]]
+    then
+      crest_2_splitclean $1
+    fi
+  fi
+  cd $home
+done
+
+
+
+
+
